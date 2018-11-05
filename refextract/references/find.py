@@ -27,6 +27,7 @@ from __future__ import absolute_import, division, print_function
 
 import logging
 import re
+import Levenshtein
 
 from .regexs import \
     get_reference_section_title_patterns, \
@@ -37,7 +38,10 @@ from .regexs import \
     re_reference_line_bracket_markers, \
     re_reference_line_dot_markers, \
     re_reference_line_number_markers, \
-    re_num
+    re_num, \
+    re_year_num
+
+from .tag import identifiy_journals_re, identify_journals, tag_reference_line
 
 LOGGER = logging.getLogger(__name__)
 
@@ -510,3 +514,177 @@ def get_reference_section_beginning(fulltext):
     else:
         LOGGER.debug(u"could not find references section")
     return sect_start
+
+
+def identify_author_or_journal(line, kb, author_regex):
+
+
+    hard_search=author_regex.search(line)
+
+    res,journal_count=tag_reference_line(line, kb, {})
+
+    return hard_search, journal_count
+
+
+
+def find_reference_chunks_based_on_year_n_symbol_matching(docbody, marker_patterns):
+    """
+    This function tries to find references by "year matching" (years are the most common feature in all references).
+    This is especially important because the reference style changed from the 1930s to the 1970s from referencing
+    on every page to a reference section at the end of the document. This method is therefore applicable to the old
+     referencing style. In particular, in the old style, numbers are often not used but different symbols like *,**, 
+    or others, which is a second complication for the standard pattern matching.
+    @param docbody: (list) of strings -each string is a line in the document.
+    @return: (list of dictionaries, each dictionary for a potential reference section):
+    Each dictionary consists of:
+    { 'start_line' : (integer) - index in docbody of 1st reference line,
+       'title_string' : (None) - title of the reference section
+                                 (None since no title),
+       'marker' : (string) - the marker of the first reference line,
+       'marker_pattern' : (string) - the regexp string used to find the
+                                     marker,
+       'title_marker_same_line' : (integer) 0 - to signal title not on same
+                                   line as marker.
+         }
+
+    
+    """
+
+    if not docbody:
+        return []
+
+    import numpy
+    from .regexs import re_year_num, re_year
+    from ..authors.regexs import  get_author_regexps
+    import re
+
+    from .kbs import get_kbs
+    from .tag import identify_and_tag_authors
+
+    this_kbs=get_kbs()
+    author_kbs=this_kbs["authors"]
+    #standardised_titles = this_kbs['journals'][1]
+    #print(standardised_titles)
+    #standardised_titles.update(this_kbs['journals_re'])
+    #print(standardised_titles)
+    
+    comp_re_year_num=re.compile(re_year_num)
+    comp_re_year=re.compile(re_year)
+
+    ref_start_line = ref_line_marker = None
+
+    ## just parse all lines sequentially from the start .. if a year pattern matches, check some conditions
+    ## if conditions are met, start a new section or continue current section
+
+    counter=0
+    last_year_index=-10
+
+    author_regexp_hard, author_regexp_weak=get_author_regexps()
+   
+    segment_sections=[]
+    new_segment=[]
+    uninteresting_beginning_lines=[]
+
+    import hist
+    rel_distances=[]
+
+    for line_index, cur_line in enumerate(docbody):
+    
+        #regex_match_list(line.strip(), marker_patterns)
+        stripped_line=cur_line.strip()
+        matches=comp_re_year_num.search(stripped_line)
+
+        if(matches is not None):
+            #multi_match=comp_re_year_num.search(cur_line.strip())
+            #print("CURLINE: ", stripped_line, "INDEX: ", line_index)
+            #print(matches.start(), matches.end(), matches.span())
+
+            if(line_index<15):
+                ## line is in beginning .. so no reference, but title or other "received " string
+                uninteresting_beginning_lines.append(stripped_line)
+                continue
+
+            # ok we are further away from the beginning to do previous line checks ..
+            else:
+                cur_ref=[]
+                similar=False
+                for ul in uninteresting_beginning_lines:
+                    relative_levenshtein=float(Levenshtein.distance(ul, stripped_line))/(0.5*(float(len(ul)+len(stripped_line))))
+                    rel_distances.append(relative_levenshtein)
+                    
+                    # relative distance < 0.1 is usually sufficient to identify similar string (single character errors due to digitization
+                    # are taken into account here)
+                    if(relative_levenshtein<0.1):
+                        similar=True
+                        continue
+                if(similar):
+                    continue
+
+                ## once we reach this point, a string is interesting enough and we have to find out where the start of the reference
+                ## section is exactly
+
+                print("cur .. ", line_index, stripped_line)
+                if(line_index-last_year_index > 4):
+                    ## append new_segment to list of segments and open a new segment
+                    if(len(new_segment)>0):
+                        segment_sections.append(new_segment)
+                    new_segment=[]
+
+                
+
+                ## check if we see author/journal evidence in the same line .. if first element, start new referrence segment
+                pot_author, pot_journal=identify_author_or_journal(stripped_line, this_kbs, author_regexp_hard)
+                if(pot_author is not None or len(pot_journal.keys())>0):
+                    
+                    if(len(new_segment)==0):
+                        new_segment.append(docbody[line_index])
+                        last_year_index=line_index
+
+                        ## go to next line directly
+                        continue
+                
+                journal_or_auth_found=False
+                ## go back 4 lines and check for authors / journals there
+                for backwards_index in (numpy.arange(4)+1):
+                    
+                    if(last_year_index==(line_index-backwards_index)):
+                        ### ok we found the previous end line(assuming year always ends a ).. do not add it to current stack
+                        
+                        ### assume the hwole section until this line is part of the reference and add it
+
+                        new_segment.extend(docbody[last_year_index+1:line_index+1])
+                        print("extending curr segment by ", docbody[last_year_index+1:line_index+1]), "because at end"
+                       
+                        break
+                    else:
+                        ### previous line was not a "year" line .. lets check
+                        ### what it is if we are starting a new segment
+                        if(len(new_segment)==0):
+                            bw_line=docbody[line_index-backwards_index].strip()
+                            #print("identify prev line ... ", bw_line)
+                            prev_auth, prev_journal=identify_author_or_journal(bw_line, this_kbs, author_regexp_hard)
+                            #print(" ......... > ", prev_auth, prev_journal)
+                            if(prev_auth is not None or len(prev_journal.keys())>0):
+                                journal_or_auth_found=True
+                                #print("journal found ", line_index-backwards_index)
+                                #print(prev_auth, prev_journal)
+                            else:
+                                if(journal_or_auth_found):
+                                    #print("now extenidng ", line_index-backwards_index)
+                                    #print(docbody[line_index-backwards_index+1:line_index+1])
+                                    ## found journal/autho before, but now not.. finish off segment then with previous line
+                                    new_segment.extend(docbody[line_index-backwards_index+1:line_index+1])#
+                                    print("added first potential element .. ", new_segment)
+                                    break
+                last_year_index=line_index
+
+                        
+            
+
+            counter+=1
+    
+    if(len(new_segment)>0):
+        segment_sections.append(new_segment)
+
+    exit(-1)
+

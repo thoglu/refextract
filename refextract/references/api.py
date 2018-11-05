@@ -103,7 +103,8 @@ def extract_references_from_file(path,
                                  recid=None,
                                  reference_format=u"{title} {volume} ({year}) {page}",
                                  linker_callback=None,
-                                 override_kbs_files=None):
+                                 override_kbs_files=None,
+                                 reference_search_mode="standard"):
     """Extract references from a local pdf file.
 
     The first parameter is the path to the file.
@@ -129,11 +130,12 @@ def extract_references_from_file(path,
     if not os.path.isfile(path):
         raise FullTextNotAvailableError(u"File not found: '{0}'".format(path))
 
+    print("search mode", reference_search_mode)
     docbody = get_plaintext_document_body(path)
-    reflines, dummy, dummy = extract_references_from_fulltext(docbody)
+    reflines, dummy, dummy = extract_references_from_fulltext(docbody, reference_search_mode=reference_search_mode)
     if not reflines:
         docbody = get_plaintext_document_body(path, keep_layout=True)
-        reflines, dummy, dummy = extract_references_from_fulltext(docbody)
+        reflines, dummy, dummy = extract_references_from_fulltext(docbody, reference_search_mode=reference_search_mode)
 
     parsed_refs, stats = parse_references(
         reflines,

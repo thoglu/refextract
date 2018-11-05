@@ -35,12 +35,12 @@ from ..documents.text import (
 )
 
 from .config import CFG_REFEXTRACT_MAX_LINES
-from .find import find_end_of_reference_section, get_reference_section_beginning
+from .find import find_end_of_reference_section, get_reference_section_beginning, find_reference_chunks_based_on_year_n_symbol_matching
 
 LOGGER = logging.getLogger(__name__)
 
 
-def extract_references_from_fulltext(fulltext):
+def extract_references_from_fulltext(fulltext, reference_search_mode="standard"):
     """Locate and extract the reference section from a fulltext document.
        Return the extracted reference section as a list of strings, whereby each
        string in the list is considered to be a single reference line.
@@ -51,41 +51,55 @@ def extract_references_from_fulltext(fulltext):
        @return: (list) of strings, where each string is an extracted reference
         line.
     """
-    # Try to remove pagebreaks, headers, footers
-    fulltext = remove_page_boundary_lines(fulltext)
-    status = 0
-    # How ref section found flag
-    how_found_start = 0
-    # Find start of refs section
-    ref_sect_start = get_reference_section_beginning(fulltext)
 
-    if ref_sect_start is None:
-        # No References
-        refs = []
-        status = 4
-        LOGGER.debug(u"extract_references_from_fulltext: ref_sect_start is None")
-    else:
-        # If a reference section was found, however weak
-        ref_sect_end = \
-            find_end_of_reference_section(fulltext,
-                                          ref_sect_start["start_line"],
-                                          ref_sect_start["marker"],
-                                          ref_sect_start["marker_pattern"])
-        if ref_sect_end is None:
-            # No End to refs? Not safe to extract
+    if(reference_search_mode=="standard"):
+        # Try to remove pagebreaks, headers, footers
+        fulltext = remove_page_boundary_lines(fulltext)
+        status = 0
+        # How ref section found flag
+        how_found_start = 0
+        # Find start of refs section
+        ref_sect_start = get_reference_section_beginning(fulltext)
+
+        if ref_sect_start is None:
+            # No References
             refs = []
-            status = 5
-            LOGGER.debug(u"extract_references_from_fulltext: no end to refs!")
+            status = 4
+            LOGGER.debug(u"extract_references_from_fulltext: ref_sect_start is None")
         else:
-            # If the end of the reference section was found.. start extraction
-            refs = get_reference_lines(fulltext,
-                                       ref_sect_start["start_line"],
-                                       ref_sect_end,
-                                       ref_sect_start["title_string"],
-                                       ref_sect_start["marker_pattern"],
-                                       ref_sect_start["title_marker_same_line"])
+            # If a reference section was found, however weak
+            ref_sect_end = \
+                find_end_of_reference_section(fulltext,
+                                              ref_sect_start["start_line"],
+                                              ref_sect_start["marker"],
+                                              ref_sect_start["marker_pattern"])
+            if ref_sect_end is None:
+                # No End to refs? Not safe to extract
+                refs = []
+                status = 5
+                LOGGER.debug(u"extract_references_from_fulltext: no end to refs!")
+            else:
+                # If the end of the reference section was found.. start extraction
+                refs = get_reference_lines(fulltext,
+                                           ref_sect_start["start_line"],
+                                           ref_sect_end,
+                                           ref_sect_start["title_string"],
+                                           ref_sect_start["marker_pattern"],
+                                           ref_sect_start["title_marker_same_line"])
 
-    return refs, status, how_found_start
+        return refs, status, how_found_start
+    elif(reference_search_mode=="year_n_symbols"):
+        ## extraction based on year and symbol information
+        res=find_reference_chunks_based_on_year_n_symbol_matching(fulltext, None)
+
+        ## combine individual ref chuncs into one reference chunk
+        print(res)
+
+        exit(-1)
+    else:
+        print("unknown search_ref_section_type of references: ", search_ref_section_type)
+        print("please specific a known type: 'standard', 'year_n_symbols'")
+        exit(-1)
 
 
 def get_reference_lines(docbody,
