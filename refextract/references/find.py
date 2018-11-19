@@ -518,9 +518,10 @@ def get_reference_section_beginning(fulltext):
 
 def identify_author_or_journal(line, kb, author_regex):
 
-
+    ## author search
     hard_search=author_regex.search(line)
 
+    ## re-purposed journal search
     res,journal_count=tag_reference_line(line, kb, {})
 
     return hard_search, journal_count
@@ -584,9 +585,11 @@ def find_reference_chunks_based_on_year_n_symbol_matching(docbody, marker_patter
     segment_sections=[]
     new_segment=[]
     uninteresting_beginning_lines=[]
+    individual_refs=[]
 
     import hist
     rel_distances=[]
+
 
     for line_index, cur_line in enumerate(docbody):
     
@@ -596,7 +599,7 @@ def find_reference_chunks_based_on_year_n_symbol_matching(docbody, marker_patter
 
         if(matches is not None):
             #multi_match=comp_re_year_num.search(cur_line.strip())
-            #print("CURLINE: ", stripped_line, "INDEX: ", line_index)
+            print("CURLINE: ", stripped_line, "INDEX: ", line_index)
             #print(matches.start(), matches.end(), matches.span())
 
             if(line_index<15):
@@ -623,7 +626,7 @@ def find_reference_chunks_based_on_year_n_symbol_matching(docbody, marker_patter
                 ## once we reach this point, a string is interesting enough and we have to find out where the start of the reference
                 ## section is exactly
 
-                print("cur .. ", line_index, stripped_line)
+                #print("cur .. ", line_index, stripped_line)
                 if(line_index-last_year_index > 4):
                     ## append new_segment to list of segments and open a new segment
                     if(len(new_segment)>0):
@@ -639,12 +642,15 @@ def find_reference_chunks_based_on_year_n_symbol_matching(docbody, marker_patter
                     if(len(new_segment)==0):
                         new_segment.append(docbody[line_index])
                         last_year_index=line_index
+                        individual_refs.append("".join(docbody[line_index]).replace("\n", "").strip())
+                        #print("THE FIRST LINE: ", individual_refs[-1])
 
                         ## go to next line directly
                         continue
                 
                 journal_or_auth_found=False
                 ## go back 4 lines and check for authors / journals there
+                journal_auth_found_line_index=-1
                 for backwards_index in (numpy.arange(4)+1):
                     
                     if(last_year_index==(line_index-backwards_index)):
@@ -653,8 +659,11 @@ def find_reference_chunks_based_on_year_n_symbol_matching(docbody, marker_patter
                         ### assume the hwole section until this line is part of the reference and add it
 
                         new_segment.extend(docbody[last_year_index+1:line_index+1])
-                        print("extending curr segment by ", docbody[last_year_index+1:line_index+1]), "because at end"
-                       
+                        #print("ok no journal search necessary")
+                        #print("IDENTIFIED: ", docbody[last_year_index+1:line_index+1])
+                        individual_refs.append("".join(docbody[last_year_index+1:line_index+1]).replace("\n", " ").strip())
+                        #print("extending curr segment by ", docbody[last_year_index+1:line_index+1]), "because at end"
+                        
                         break
                     else:
                         ### previous line was not a "year" line .. lets check
@@ -663,19 +672,27 @@ def find_reference_chunks_based_on_year_n_symbol_matching(docbody, marker_patter
                             bw_line=docbody[line_index-backwards_index].strip()
                             #print("identify prev line ... ", bw_line)
                             prev_auth, prev_journal=identify_author_or_journal(bw_line, this_kbs, author_regexp_hard)
-                            #print(" ......... > ", prev_auth, prev_journal)
+                           
                             if(prev_auth is not None or len(prev_journal.keys())>0):
                                 journal_or_auth_found=True
-                                #print("journal found ", line_index-backwards_index)
-                                #print(prev_auth, prev_journal)
-                            else:
-                                if(journal_or_auth_found):
-                                    #print("now extenidng ", line_index-backwards_index)
-                                    #print(docbody[line_index-backwards_index+1:line_index+1])
-                                    ## found journal/autho before, but now not.. finish off segment then with previous line
-                                    new_segment.extend(docbody[line_index-backwards_index+1:line_index+1])#
-                                    print("added first potential element .. ", new_segment)
-                                    break
+                                #print("FOUND JOURAN ON ", bw_line)
+                                #print("prev_journal", prev_journal.keys())
+                                if(prev_auth is not None):
+                                    print("AUTHOR: ", prev_auth.group(0))
+                                journal_auth_found_line_index=backwards_index            
+                if(journal_or_auth_found):
+                    #print("now extenidng ", line_index-backwards_index)
+                    #print(docbody[line_index-backwards_index+1:line_index+1])
+                    ## found journal/autho before, but now not.. finish off segment then with previous line
+                    full_res="".join(docbody[line_index-journal_auth_found_line_index+1:line_index+1]).replace("\n", " ").strip()
+                    if(len(full_res.replace(" ", ""))>10):
+                        
+                        new_segment.extend(docbody[line_index-journal_auth_found_line_index+1:line_index+1])#
+                        
+                        #print("1st item and ADDING ... ", docbody[line_index-journal_auth_found_line_index+1:line_index+1])
+                        individual_refs.append(full_res)
+                        #print("added first potential element .. ", new_segment)
+                        
                 last_year_index=line_index
 
                         
@@ -683,8 +700,5 @@ def find_reference_chunks_based_on_year_n_symbol_matching(docbody, marker_patter
 
             counter+=1
     
-    if(len(new_segment)>0):
-        segment_sections.append(new_segment)
-
-    exit(-1)
+    return individual_refs
 

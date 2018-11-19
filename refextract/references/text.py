@@ -90,12 +90,10 @@ def extract_references_from_fulltext(fulltext, reference_search_mode="standard")
         return refs, status, how_found_start
     elif(reference_search_mode=="year_n_symbols"):
         ## extraction based on year and symbol information
-        res=find_reference_chunks_based_on_year_n_symbol_matching(fulltext, None)
+        refs=find_reference_chunks_based_on_year_n_symbol_matching(fulltext, None)
 
         ## combine individual ref chuncs into one reference chunk
-        print(res)
-
-        exit(-1)
+        return refs, 0, 0
     else:
         print("unknown search_ref_section_type of references: ", search_ref_section_type)
         print("please specific a known type: 'standard', 'year_n_symbols'")

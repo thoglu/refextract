@@ -902,6 +902,9 @@ def parse_references_elements(ref_sect, kbs, linker_callback=None):
         citations.append({'elements': citation_elements,
                           'line_marker': line_marker,
                           'raw_ref': ref_line})
+        if("Norman" in ref_line):
+            print(ref_line)
+
 
     # Return the list of processed reference lines:
     return citations, counts, bad_titles_count

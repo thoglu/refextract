@@ -137,6 +137,7 @@ def extract_references_from_file(path,
         docbody = get_plaintext_document_body(path, keep_layout=True)
         reflines, dummy, dummy = extract_references_from_fulltext(docbody, reference_search_mode=reference_search_mode)
 
+    
     parsed_refs, stats = parse_references(
         reflines,
         recid=recid,
