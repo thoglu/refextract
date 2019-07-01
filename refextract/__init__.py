@@ -31,6 +31,13 @@ from .references.api import (
     extract_references_from_string,
     extract_references_from_url,
 )
+
+from .references.regexs import (
+    re_new_arxiv,
+    re_new_arxiv_5digits,
+    RE_OLD_ARXIV
+)
+
 from .version import __version__
 
 __all__ = (
