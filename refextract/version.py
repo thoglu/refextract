@@ -28,4 +28,4 @@ from __future__ import absolute_import, division, print_function
 from autosemver.packaging import get_current_version
 
 
-__version__ = get_current_version(project_name='refextract')
+__version__ = 0.1#get_current_version(project_name='refextract')

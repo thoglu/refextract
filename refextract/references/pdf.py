@@ -58,7 +58,7 @@ def extract_texkeys_from_pdf(pdf_file):
             LOGGER.debug(u"PDF: Internal PyPDF2 error, no TeXkeys returned.")
             return []
         # not all named destinations point to references
-        refs = [dest for dest in destinations.iteritems()
+        refs = [dest for dest in destinations.items()
                 if re_reference_in_dest.match(dest[0])]
         try:
             if _destinations_in_two_columns(pdf, refs):
